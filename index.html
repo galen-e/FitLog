@@ -57,7 +57,7 @@ function load(){try{const r=localStorage.getItem('fitlog1');if(r)return JSON.par
 let S=load();
 function save(){try{localStorage.setItem('fitlog1',JSON.stringify(S))}catch(e){mem=S}}
 const PRESET={Chest:['Bench Press','Incline Dumbbell Press','Push-Up','Chest Fly'],Back:['Deadlift','Pull-Up','Barbell Row','Lat Pulldown'],Legs:['Squat','Leg Press','Lunge','Romanian Deadlift','Calf Raise'],Glutes:['Hip Thrust'],Shoulders:['Overhead Press','Lateral Raise','Face Pull'],Biceps:['Barbell Curl','Hammer Curl'],Triceps:['Triceps Pushdown','Dips','Skull Crusher'],Core:['Plank','Crunch','Hanging Leg Raise'],Cardio:['Running','Cycling','Rowing']};
-let tab='w',mode='in',asked=false,sel=null,arm=null,calM=0,selK=null;
+let tab='w',mode='in',asked=false,sel=null,arm=null,calM=0,selK=null,pd=null,editing=false;
 const U=()=>S.users[S.session];
 const DAY=864e5;
 const enc=new TextEncoder();
@@ -154,9 +154,13 @@ const TIPS=['Sleep 7–9 hours. Most muscle repair happens while you sleep.','Ea
 const sch=()=>U().sched||(U().sched={});
 const lab=i=>{const s=sch()[i];return s?(s.name||(s.groups||[]).join(' + ')):''};
 const kd=d=>d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
-function mkS(i){return sch()[i]||(sch()[i]={name:'',groups:[]})}
-function tgG(i,g){const s=mkS(i),k=s.groups.indexOf(g);k<0?s.groups.push(g):s.groups.splice(k,1);save();render()}
-function setN(i,v){mkS(i).name=v.trim();save();render()}
+function plab(i){const s=pd[i];return s.name||s.groups.join(' + ')}
+function updLb(i){const e=$('#lb'+i);if(e)e.textContent='· '+(plab(i)||'Rest')}
+function editSplit(){pd={};for(let i=0;i<7;i++){const s=sch()[i]||{};pd[i]={name:s.name||'',groups:[...(s.groups||[])]}}editing=true;render()}
+function tgG(i,g,el){const s=pd[i],k=s.groups.indexOf(g);k<0?s.groups.push(g):s.groups.splice(k,1);el.classList.toggle('on');updLb(i)}
+function setN(i,v){pd[i].name=v.trim();updLb(i)}
+function saveSplit(){U().sched=pd;pd=null;editing=false;save();toast('Split saved');render()}
+function cancelSplit(){pd=null;editing=false;render()}
 function begin(){const d=D(),l=lab(new Date().getDay());if(!d.name)d.name=l;if(!d.t0&&!d.acc)d.t0=Date.now();tab='w';save();render()}
 const going=()=>{const d=D();return d.t0||d.acc||d.ex.length};
 function beginBtn(l){return `<button class="pri" onclick="begin()">${going()?'Continue':'Begin'} ${esc(l)}</button>`}
@@ -182,11 +186,15 @@ function vPlan(){
   const det=`<div class="card"><h2>${sd.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</h2>
   ${ws.map(w=>`<div style="margin-bottom:6px"><b>✓ ${esc(w.name)}</b> <span class="mut">· ${fmt(w.dur)}</span>${chips(w.groups)}</div>`).join('')}
   ${sl?`<p style="margin:0 0 8px"><span class="mut">Planned:</span> <b>${esc(sl)}</b></p>${isT?beginBtn(sl):''}`:`<p style="margin:0"><b>Rest day</b> <span class="mut">· recovery tips</span></p>${tipList(3,da)}`}</div>`;
+  if(editing&&pd){
+    const ed=[1,2,3,4,5,6,0].map(i=>{const s=pd[i];return `<div style="margin:12px 0"><b>${DN[i]}</b> <span class="mut" id="lb${i}">· ${esc(plab(i)||'Rest')}</span><div class="chips">${Object.keys(PRESET).map(g=>`<button class="chip${s.groups.includes(g)?' on':''}" onclick="tgG(${i},'${g}',this)">${g}</button>`).join('')}</div><input style="margin-top:8px" placeholder="Custom name (optional)" value="${esc(s.name)}" oninput="setN(${i},this.value)"></div>`}).join('');
+    return `<div class="card"><h2>Weekly split</h2><p class="mut" style="margin:0">Pick muscle groups for each training day. Leave a day empty for a rest day. Nothing is saved until you tap Save.</p>${ed}<button class="pri" onclick="saveSplit()">Save split</button><button class="link" style="width:100%;margin-top:6px" onclick="cancelSplit()">Cancel</button></div>`;
+  }
   const none=!Object.keys(sch()).some(i=>lab(i));
-  const editor=[1,2,3,4,5,6,0].map(i=>{const s=sch()[i]||{name:'',groups:[]};return `<div style="margin:12px 0"><b>${DN[i]}</b> <span class="mut">${lab(i)?'· '+esc(lab(i)):'· Rest'}</span><div class="chips">${Object.keys(PRESET).map(g=>`<button class="chip${s.groups.includes(g)?' on':''}" onclick="tgG(${i},'${g}')">${g}</button>`).join('')}</div><input style="margin-top:8px" placeholder="Custom name (optional)" value="${esc(s.name)}" onchange="setN(${i},this.value)"></div>`}).join('');
+  const sum=[1,2,3,4,5,6,0].map(i=>`<div class="row" style="margin:4px 0"><span>${DN[i]}</span><span class="mut" style="text-align:right">${esc(lab(i)||'Rest')}</span></div>`).join('');
   return `<div class="card"><div class="row"><button onclick="calM--;render()">‹</button><h2 style="margin:0;text-align:center">${m.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><button onclick="calM++;render()">›</button></div>
   <div class="dow">${'SMTWTFS'.split('').map(c=>`<span>${c}</span>`).join('')}</div><div class="cal">${cells}</div></div>${det}
-  <details class="card" ${none?'open':''}><summary><b>Weekly split</b> <span class="mut">· tap muscle groups for each day</span></summary>${editor}<p class="mut" style="margin:0">Days with nothing selected are rest days.</p></details>`;
+  <div class="card"><h2>Weekly split</h2>${sum}<button onclick="editSplit()" style="margin-top:8px;width:100%">${none?'Set up weekly split':'Edit split'}</button></div>`;
 }
 function vAuth(){
   return `<header><h1>FitLog</h1></header><div class="card"><h2>${mode==='in'?'Log in':'Create account'}</h2>

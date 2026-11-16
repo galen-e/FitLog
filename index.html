@@ -39,6 +39,14 @@ nav button.on{color:var(--ac);font-weight:700}
 .err{color:var(--dn);min-height:20px;font-size:14px}
 svg text{fill:var(--mut);font-size:10px}
 .up{color:var(--ac);font-weight:600}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:12px;color:var(--mut);margin:8px 0 4px}
+.day{padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--bg);border:1px solid var(--bd);min-height:52px;position:relative;font-size:14px;border-radius:8px;color:var(--tx)}
+.day span{font-size:9px;color:var(--mut)}.day.wk{background:var(--chip)}.day.today{border:2px solid var(--ac)}.day.sel{outline:2px solid var(--tx)}
+.day i{position:absolute;top:1px;right:3px;font-size:10px;color:var(--ac);font-style:normal}
+button.chip{border:1px solid var(--bd);background:var(--card);padding:4px 10px;font-size:13px}
+button.chip.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+ul.tips{margin:6px 0 0;padding-left:20px}ul.tips li{margin:4px 0}
 </style></head>
 <body><main id="app"></main><div id="toast"></div>
 <script>
@@ -49,7 +57,7 @@ function load(){try{const r=localStorage.getItem('fitlog1');if(r)return JSON.par
 let S=load();
 function save(){try{localStorage.setItem('fitlog1',JSON.stringify(S))}catch(e){mem=S}}
 const PRESET={Chest:['Bench Press','Incline Dumbbell Press','Push-Up','Chest Fly'],Back:['Deadlift','Pull-Up','Barbell Row','Lat Pulldown'],Legs:['Squat','Leg Press','Lunge','Romanian Deadlift','Calf Raise'],Glutes:['Hip Thrust'],Shoulders:['Overhead Press','Lateral Raise','Face Pull'],Biceps:['Barbell Curl','Hammer Curl'],Triceps:['Triceps Pushdown','Dips','Skull Crusher'],Core:['Plank','Crunch','Hanging Leg Raise'],Cardio:['Running','Cycling','Rowing']};
-let tab='w',mode='in',asked=false,sel=null,arm=null;
+let tab='w',mode='in',asked=false,sel=null,arm=null,calM=0,selK=null;
 const U=()=>S.users[S.session];
 const DAY=864e5;
 const enc=new TextEncoder();
@@ -116,7 +124,7 @@ function vWorkout(){
   <div class="sets mut" style="margin-top:8px"><span>Set</span><span>Reps</span><span>Weight (${u.unit})</span><span></span></div>
   ${e.sets.map((s,j)=>`<div class="sets"><span class="mut">${j+1}</span><input type="number" inputmode="numeric" value="${esc(s.reps)}" oninput="sv(${i},${j},'reps',this.value)"><input type="number" inputmode="decimal" value="${esc(s.weight)}" oninput="sv(${i},${j},'weight',this.value)"><button class="del" onclick="rmSet(${i},${j})">✕</button></div>`).join('')}
   <button onclick="addSet(${i})" style="margin-top:6px">+ Add set</button></div>`).join('');
-  return `${due()?'<div class="card" style="border-color:var(--ac)"><b>Weekly weigh-in due.</b> <button class="link" onclick="tab=\'p\';render()">Log it →</button></div>':''}
+  return `${todayCard()}${due()?'<div class="card" style="border-color:var(--ac)"><b>Weekly weigh-in due.</b> <button class="link" onclick="tab=\'p\';render()">Log it →</button></div>':''}
   <div class="card"><input placeholder="Workout name (optional)" value="${esc(d.name)}" oninput="D().name=this.value;save()">
   <div class="row" style="margin-top:10px"><div><div class="mut">Duration</div><div class="big" id="tm">${fmt(secs(d))}</div></div><button onclick="tog()">${d.t0?'Pause':(d.acc?'Resume':'Start')}</button></div>
   ${chips([...new Set(d.ex.map(e=>e.group))])}</div>
@@ -141,6 +149,45 @@ function vProgress(){
   <p class="mut">${u.weights.length?'Last weigh-in: '+dstr(u.weights[u.weights.length-1].date)+' ('+u.weights[u.weights.length-1].v+' '+u.unit+')':'No weigh-ins yet.'}</p>${chart(wp)}${delta(wp,u.unit)}</div>
   <div class="card"><h2>Strength progress</h2>${names.length?`<select onchange="sel=this.value;render()">${names.map(n=>`<option ${n===sel?'selected':''}>${esc(n)}</option>`).join('')}</select><p class="mut">Heaviest weight per workout (${u.unit})</p>${chart(sp)}${delta(sp,u.unit)}`:'<p class="mut">Save workouts with weights to see your strength charts.</p>'}</div>`;
 }
+const DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const TIPS=['Sleep 7–9 hours. Most muscle repair happens while you sleep.','Eat enough protein across the day and enough carbs to refill your energy stores.','Drink plenty of water, especially if you sweat a lot when training.','Take a light walk or do easy stretching and mobility work to keep blood flowing.','Foam roll or gently massage tight, sore areas.','A warm shower or bath can help muscles relax.','Mild soreness is normal, but sharp or joint pain isn’t. Rest it, and see a professional if it lingers.','Keep stress low. Rest days work best when they’re genuinely restful.'];
+const sch=()=>U().sched||(U().sched={});
+const lab=i=>{const s=sch()[i];return s?(s.name||(s.groups||[]).join(' + ')):''};
+const kd=d=>d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+function mkS(i){return sch()[i]||(sch()[i]={name:'',groups:[]})}
+function tgG(i,g){const s=mkS(i),k=s.groups.indexOf(g);k<0?s.groups.push(g):s.groups.splice(k,1);save();render()}
+function setN(i,v){mkS(i).name=v.trim();save();render()}
+function begin(){const d=D(),l=lab(new Date().getDay());if(!d.name)d.name=l;if(!d.t0&&!d.acc)d.t0=Date.now();tab='w';save();render()}
+const going=()=>{const d=D();return d.t0||d.acc||d.ex.length};
+function beginBtn(l){return `<button class="pri" onclick="begin()">${going()?'Continue':'Begin'} ${esc(l)}</button>`}
+function tipList(n,start){return `<ul class="tips">${Array.from({length:n},(_,k)=>`<li>${TIPS[(start+k)%TIPS.length]}</li>`).join('')}</ul>`}
+function todayCard(){
+  const now=new Date(),l=lab(now.getDay());
+  if(!Object.keys(sch()).some(i=>lab(i)))return `<div class="card"><h2>Plan your week</h2><p class="mut" style="margin:0 0 8px">Set your weekly split to get a one-tap start button here.</p><button onclick="tab='c';render()">Open Plan →</button></div>`;
+  if(l)return `<div class="card"><div class="mut">Today’s plan</div><h2>${esc(l)}</h2>${beginBtn(l)}</div>`;
+  return `<div class="card"><h2>Today: Rest day</h2><p class="mut" style="margin:0">${TIPS[now.getDate()%TIPS.length]}</p><button class="link" onclick="tab='c';render()">More recovery tips →</button></div>`;
+}
+function vPlan(){
+  const u=U(),now=new Date(),m=new Date(now.getFullYear(),now.getMonth()+calM,1),first=m.getDay(),dim=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+  const done={};u.workouts.forEach(w=>{done[kd(new Date(w.date))]=1});
+  if(!selK)selK=kd(now);
+  let cells='';for(let i=0;i<first;i++)cells+='<div></div>';
+  for(let d=1;d<=dim;d++){
+    const dt=new Date(m.getFullYear(),m.getMonth(),d),k=kd(dt),l=lab(dt.getDay()),s=sch()[dt.getDay()];
+    const ab=l?(s.groups.length?s.groups.map(g=>g.slice(0,3)).join('·'):l.slice(0,6)):'Rest';
+    cells+=`<button class="day${k===kd(now)?' today':''}${k===selK?' sel':''}${l?' wk':''}" onclick="selK='${k}';render()"><b>${d}</b><span>${esc(ab)}</span>${done[k]?'<i>✓</i>':''}</button>`;
+  }
+  const [y,mo,da]=selK.split('-').map(Number),sd=new Date(y,mo-1,da),sl=lab(sd.getDay()),isT=selK===kd(now);
+  const ws=u.workouts.filter(w=>kd(new Date(w.date))===selK);
+  const det=`<div class="card"><h2>${sd.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</h2>
+  ${ws.map(w=>`<div style="margin-bottom:6px"><b>✓ ${esc(w.name)}</b> <span class="mut">· ${fmt(w.dur)}</span>${chips(w.groups)}</div>`).join('')}
+  ${sl?`<p style="margin:0 0 8px"><span class="mut">Planned:</span> <b>${esc(sl)}</b></p>${isT?beginBtn(sl):''}`:`<p style="margin:0"><b>Rest day</b> <span class="mut">· recovery tips</span></p>${tipList(3,da)}`}</div>`;
+  const none=!Object.keys(sch()).some(i=>lab(i));
+  const editor=[1,2,3,4,5,6,0].map(i=>{const s=sch()[i]||{name:'',groups:[]};return `<div style="margin:12px 0"><b>${DN[i]}</b> <span class="mut">${lab(i)?'· '+esc(lab(i)):'· Rest'}</span><div class="chips">${Object.keys(PRESET).map(g=>`<button class="chip${s.groups.includes(g)?' on':''}" onclick="tgG(${i},'${g}')">${g}</button>`).join('')}</div><input style="margin-top:8px" placeholder="Custom name (optional)" value="${esc(s.name)}" onchange="setN(${i},this.value)"></div>`}).join('');
+  return `<div class="card"><div class="row"><button onclick="calM--;render()">‹</button><h2 style="margin:0;text-align:center">${m.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><button onclick="calM++;render()">›</button></div>
+  <div class="dow">${'SMTWTFS'.split('').map(c=>`<span>${c}</span>`).join('')}</div><div class="cal">${cells}</div></div>${det}
+  <details class="card" ${none?'open':''}><summary><b>Weekly split</b> <span class="mut">· tap muscle groups for each day</span></summary>${editor}<p class="mut" style="margin:0">Days with nothing selected are rest days.</p></details>`;
+}
 function vAuth(){
   return `<header><h1>FitLog</h1></header><div class="card"><h2>${mode==='in'?'Log in':'Create account'}</h2>
   <input id="un" placeholder="Username" autocapitalize="none" autocomplete="username" style="margin-bottom:8px">
@@ -153,9 +200,9 @@ function vAuth(){
 function render(){
   const a=$('#app');
   if(!S.session||!U()){a.innerHTML=vAuth();return}
-  const v=tab==='w'?vWorkout():tab==='h'?vHistory():vProgress();
+  const v=tab==='w'?vWorkout():tab==='c'?vPlan():tab==='h'?vHistory():vProgress();
   const ov=(!asked&&due())?`<div class="ov"><div class="card"><h2>Weekly weigh-in</h2><p class="mut">Log your body weight so we can track your progress.</p><input id="bw" type="number" inputmode="decimal" placeholder="Weight (${U().unit})" style="margin-bottom:10px"><button class="pri" onclick="addW()">Save</button><button class="link" style="width:100%" onclick="skipW()">Skip for now</button></div></div>`:'';
-  a.innerHTML=`<header><h1>FitLog</h1><div class="mut">${esc(S.session)} <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['h','History'],['p','Progress']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
+  a.innerHTML=`<header><h1>FitLog</h1><div class="mut">${esc(S.session)} <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['c','Plan'],['h','History'],['p','Progress']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
 }
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));

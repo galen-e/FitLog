@@ -2,6 +2,8 @@
 
 A simple workout tracker that installs to your phone's Home Screen. Log workouts (duration, exercises, sets, reps, weight), tag muscle groups, and chart body weight and strength over time. Accounts and data are stored locally in the browser.
 
+Includes a weekly split planner and calendar with rest-day recovery tips.
+
 ## Deploy to GitHub Pages
 1. Create a new GitHub repo and upload everything in this folder (keep `index.html` at the repo root).
 2. Go to **Settings → Pages**.

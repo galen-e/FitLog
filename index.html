@@ -58,7 +58,15 @@ let S=load();
 function save(){try{localStorage.setItem('fitlog1',JSON.stringify(S))}catch(e){mem=S}}
 const PRESET={Chest:['Bench Press','Incline Dumbbell Press','Push-Up','Chest Fly'],Back:['Deadlift','Pull-Up','Barbell Row','Lat Pulldown'],Legs:['Squat','Leg Press','Lunge','Romanian Deadlift','Calf Raise'],Glutes:['Hip Thrust'],Shoulders:['Overhead Press','Lateral Raise','Face Pull'],Biceps:['Barbell Curl','Hammer Curl'],Triceps:['Triceps Pushdown','Dips','Skull Crusher'],Core:['Plank','Crunch','Hanging Leg Raise'],Cardio:['Running','Cycling','Rowing']};
 let tab='w',mode='in',asked=false,sel=null,arm=null,calM=0,selK=null,pd=null,editing=false;
-const U=()=>S.users[S.session];
+const ensureUserShape=u=>{
+  if(!u)return u;
+  u.friends=Array.isArray(u.friends)?u.friends:[];
+  u.followers=Array.isArray(u.followers)?u.followers:[];
+  u.posts=Array.isArray(u.posts)?u.posts:[];
+  u.profile=u.profile||{displayName:'',bio:''};
+  return u;
+};
+const U=()=>{const u=S.users[S.session];return ensureUserShape(u);};
 const DAY=864e5;
 const enc=new TextEncoder();
 async function hash(pw,salt){try{const k=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveBits']);const b=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:100000,hash:'SHA-256'},k,256);return btoa(String.fromCharCode(...new Uint8Array(b)))}catch(e){let h=0;for(const c of salt+pw)h=(h*31+c.charCodeAt(0))|0;return 'x'+h}}
@@ -68,10 +76,11 @@ async function auth(){
   if(mode==='up'){
     if(S.users[n]){er.textContent='That username is taken.';return}
     const salt=Math.random().toString(36).slice(2);
-    S.users[n]={salt,hash:await hash(p,salt),unit:$('#unit').value,workouts:[],weights:[],custom:[],draft:null};
+    S.users[n]={salt,hash:await hash(p,salt),unit:$('#unit').value,workouts:[],weights:[],custom:[],draft:null,friends:[],followers:[],posts:[],profile:{displayName:n,bio:'',avatar:''}};
   }else{
     const u=S.users[n];
     if(!u||u.hash!==await hash(p,u.salt)){er.textContent='Wrong username or password.';return}
+    ensureUserShape(u);
   }
   S.session=n;save();tab='w';asked=false;render();
 }
@@ -100,6 +109,46 @@ function finish(){
 }
 function discard(){U().draft=null;save();render()}
 function delW(id){if(arm!==id){arm=id;render();return}const u=U();u.workouts=u.workouts.filter(w=>w.id!==id);arm=null;save();render()}
+function followUser(target){
+  if(!target||target===S.session)return;
+  const me=U();
+  if(!me||!S.users[target])return;
+  if(me.friends.includes(target))return;
+  me.friends.push(target);
+  S.users[target].followers = Array.from(new Set([...(S.users[target].followers||[]), S.session]));
+  save();
+  render();
+}
+function unfollowUser(target){
+  if(!target||target===S.session)return;
+  const me=U();
+  me.friends=me.friends.filter(u=>u!==target);
+  if(S.users[target]){
+    S.users[target].followers=(S.users[target].followers||[]).filter(u=>u!==S.session);
+  }
+  save();
+  render();
+}
+function shareSelectedWorkout(){
+  const select=$('#postWorkoutSelect');
+  const note=$('#postCaption');
+  if(!select||!note)return;
+  const workoutId=Number(select.value);
+  const workout=U().workouts.find(w=>w.id===workoutId);
+  if(!workout){toast('Pick a saved workout first.');return}
+  const caption=note.value.trim();
+  U().posts.unshift({
+    id:Date.now(),
+    author:S.session,
+    createdAt:Date.now(),
+    caption,
+    workout:JSON.parse(JSON.stringify(workout))
+  });
+  save();
+  note.value='';
+  toast('Workout posted');
+  render();
+}
 const due=()=>{const w=U().weights;return !w.length||Date.now()-w[w.length-1].date>7*DAY};
 function addW(){const v=parseFloat($('#bw').value);if(!(v>0))return;U().weights.push({date:Date.now(),v});asked=true;save();toast('Weight logged');render()}
 function skipW(){asked=true;render()}
@@ -148,6 +197,24 @@ function vProgress(){
   return `<div class="card"><h2>Body weight</h2><div class="row"><input id="bw" type="number" inputmode="decimal" placeholder="Today’s weight (${u.unit})"><button onclick="addW()">Log</button></div>
   <p class="mut">${u.weights.length?'Last weigh-in: '+dstr(u.weights[u.weights.length-1].date)+' ('+u.weights[u.weights.length-1].v+' '+u.unit+')':'No weigh-ins yet.'}</p>${chart(wp)}${delta(wp,u.unit)}</div>
   <div class="card"><h2>Strength progress</h2>${names.length?`<select onchange="sel=this.value;render()">${names.map(n=>`<option ${n===sel?'selected':''}>${esc(n)}</option>`).join('')}</select><p class="mut">Heaviest weight per workout (${u.unit})</p>${chart(sp)}${delta(sp,u.unit)}`:'<p class="mut">Save workouts with weights to see your strength charts.</p>'}</div>`;
+}
+function vSocial(){
+  const me=U();
+  const allUsers=Object.keys(S.users).filter(name=>name!==S.session);
+  const feed=Object.keys(S.users)
+    .filter(name=>name===S.session || me.friends.includes(name))
+    .flatMap(name => (S.users[name].posts||[]).map(post => ({...post,author:name})))
+    .sort((a,b)=>Number(b.createdAt)-Number(a.createdAt));
+  return `<div class="card"><h2>Friends</h2>
+    <div class="row" style="margin-bottom:10px"><input id="friendSearch" placeholder="Search username" oninput="(function(){const q=this.value.toLowerCase();document.querySelectorAll('[data-user]').forEach(el=>{const ok=!q||el.dataset.user.includes(q);el.style.display=ok?'':'none';})}).call(this)"></div>
+    ${allUsers.length?allUsers.map(name=>`<div class="row" data-user="${esc(name.toLowerCase())}" style="margin:8px 0;padding:8px 0;border-top:1px solid var(--bd)"><div><strong>${esc(name)}</strong><div class="mut">${S.users[name].followers?.length||0} follower${(S.users[name].followers||[]).length===1?'':'s'}</div></div><button class="${me.friends.includes(name)?'link':'pri'}" onclick="${me.friends.includes(name)?'unfollowUser':'followUser'}('${name}')">${me.friends.includes(name)?'Following':'Follow'}</button></div>`).join(''):'<p class="mut">No one else is in this local community yet.</p>'}
+  </div>
+  <div class="card"><h2>Post a completed workout</h2>
+    ${me.workouts.length?`<select id="postWorkoutSelect" style="margin-bottom:8px">${me.workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><textarea id="postCaption" rows="3" placeholder="Add a note about how it felt..." style="width:100%;resize:vertical;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);color:var(--tx)"></textarea><button class="pri" style="margin-top:8px" onclick="shareSelectedWorkout()">Share workout</button>`:'<p class="mut">Complete a workout first to share it.</p>'}
+  </div>
+  <div class="card"><h2>Feed</h2>
+    ${feed.length?feed.map(post=>`<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}</div>`).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
+  </div>`;
 }
 const DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const TIPS=['Sleep 7–9 hours. Most muscle repair happens while you sleep.','Eat enough protein across the day and enough carbs to refill your energy stores.','Drink plenty of water, especially if you sweat a lot when training.','Take a light walk or do easy stretching and mobility work to keep blood flowing.','Foam roll or gently massage tight, sore areas.','A warm shower or bath can help muscles relax.','Mild soreness is normal, but sharp or joint pain isn’t. Rest it, and see a professional if it lingers.','Keep stress low. Rest days work best when they’re genuinely restful.'];
@@ -208,9 +275,9 @@ function vAuth(){
 function render(){
   const a=$('#app');
   if(!S.session||!U()){a.innerHTML=vAuth();return}
-  const v=tab==='w'?vWorkout():tab==='c'?vPlan():tab==='h'?vHistory():vProgress();
+  const v=tab==='w'?vWorkout():tab==='c'?vPlan():tab==='h'?vHistory():tab==='s'?vSocial():vProgress();
   const ov=(!asked&&due())?`<div class="ov"><div class="card"><h2>Weekly weigh-in</h2><p class="mut">Log your body weight so we can track your progress.</p><input id="bw" type="number" inputmode="decimal" placeholder="Weight (${U().unit})" style="margin-bottom:10px"><button class="pri" onclick="addW()">Save</button><button class="link" style="width:100%" onclick="skipW()">Skip for now</button></div></div>`:'';
-  a.innerHTML=`<header><h1>FitLog</h1><div class="mut">${esc(S.session)} <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['c','Plan'],['h','History'],['p','Progress']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
+  a.innerHTML=`<header><h1>FitLog</h1><div class="mut">${esc(S.session)} <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['c','Plan'],['h','History'],['p','Progress'],['s','Social']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
 }
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));

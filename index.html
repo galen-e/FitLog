@@ -150,27 +150,64 @@ function unfollowUser(target){
   save();
   render();
 }
-function shareSelectedWorkout(){
+function readMediaFiles(fileInput){
+  const files=fileInput&&fileInput.files?Array.from(fileInput.files):[];
+  if(!files.length)return [];
+  const media=[];
+  return Promise.all(files.map(file=>new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      media.push({
+        name:file.name,
+        type:file.type,
+        size:file.size,
+        data:reader.result,
+      });
+      resolve();
+    };
+    reader.onerror=()=>reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  }))).then(()=>media).catch(()=>[]);
+}
+async function shareSelectedWorkout(){
   const select=$('#postWorkoutSelect');
   const note=$('#postCaption');
+  const mediaInput=$('#postMediaInput');
   if(!select||!note)return;
   const workoutId=Number(select.value);
   const workout=U().workouts.find(w=>w.id===workoutId);
   if(!workout){toast('Pick a saved workout first.');return}
   const caption=note.value.trim();
+  const media=mediaInput?await readMediaFiles(mediaInput):[];
   U().posts.unshift({
     id:Date.now(),
     author:S.session,
     createdAt:Date.now(),
     caption,
+    media,
     workout:JSON.parse(JSON.stringify(workout))
   });
   save();
   note.value='';
+  if(mediaInput)mediaInput.value='';
   toast('Workout posted');
   render();
 }
-const due=()=>{const w=U().weights;return !w.length||Date.now()-w[w.length-1].date>7*DAY};
+function deletePost(postId){
+  const me=U();
+  me.posts=me.posts.filter(post=>post.id!==postId);
+  save();
+  render();
+}
+function editPost(postId, newCaption){
+  const me=U();
+  const post=me.posts.find(p=>p.id===postId);
+  if(!post)return;
+  post.caption=String(newCaption||'').trim();
+  save();
+  render();
+}
+const due=()=>{const w=U().weights=U().weights||[];return !w.length||Date.now()-w[w.length-1].date>7*DAY};
 function addW(){const v=parseFloat($('#bw').value);if(!(v>0))return;U().weights.push({date:Date.now(),v});asked=true;save();toast('Weight logged');render()}
 function skipW(){asked=true;render()}
 function chart(p){
@@ -231,10 +268,10 @@ function vSocial(){
     ${allUsers.length?allUsers.map(name=>`<div class="row" data-user="${esc(name.toLowerCase())}" style="margin:8px 0;padding:8px 0;border-top:1px solid var(--bd)"><div><strong>${esc(name)}</strong><div class="mut">${S.users[name].followers?.length||0} follower${(S.users[name].followers||[]).length===1?'':'s'}</div></div><button class="${me.friends.includes(name)?'link':'pri'}" onclick="${me.friends.includes(name)?'unfollowUser':'followUser'}('${name}')">${me.friends.includes(name)?'Following':'Follow'}</button></div>`).join(''):'<p class="mut">No one else is in this local community yet.</p>'}
   </div>
   <div class="card"><h2>Post a completed workout</h2>
-    ${me.workouts.length?`<select id="postWorkoutSelect" style="margin-bottom:8px">${me.workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><textarea id="postCaption" rows="3" placeholder="Add a note about how it felt..." style="width:100%;resize:vertical;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);color:var(--tx)"></textarea><button class="pri" style="margin-top:8px" onclick="shareSelectedWorkout()">Share workout</button>`:'<p class="mut">Complete a workout first to share it.</p>'}
+    ${me.workouts.length?`<select id="postWorkoutSelect" style="margin-bottom:8px">${me.workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><textarea id="postCaption" rows="3" placeholder="Add a note about how it felt..." style="width:100%;resize:vertical;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);color:var(--tx)"></textarea><input id="postMediaInput" type="file" accept="image/*,video/*" multiple style="margin-top:8px" /><button class="pri" style="margin-top:8px" onclick="shareSelectedWorkout()">Share workout</button>`:'<p class="mut">Complete a workout first to share it.</p>'}
   </div>
   <div class="card"><h2>Feed</h2>
-    ${feed.length?feed.map(post=>`<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}</div>`).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
+    ${feed.length?feed.map(post=>`<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}${post.media&&post.media.length?`<div style="display:grid;gap:8px;margin:8px 0">${post.media.map(item=>item.type.startsWith('video/')?`<video src="${item.data}" controls playsinline style="width:100%;max-height:250px;border-radius:10px;background:#000"></video>`:`<img src="${item.data}" alt="Workout attachment" style="width:100%;border-radius:10px;max-height:250px;object-fit:cover" />`).join('')}</div>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}${post.author===S.session?`<div class="row" style="margin-top:10px"><button class="link" onclick="const newCaption=prompt('Edit your post', ${JSON.stringify(post.caption||'')}); if(newCaption!==null){ editPost(${post.id}, newCaption); }">Edit</button><button class="del" onclick="deletePost(${post.id})">Delete</button></div>`:''}</div>`).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
   </div>`;
 }
 const DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];

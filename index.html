@@ -132,13 +132,15 @@ async function hydrateRemoteState(){
   S={users,session:username};
   }finally{isHydrating=false}
 }
-async function persistRemoteUserData(){
+async function persistRemoteUserData({updateProfile=false}={}){
   if(!supabaseClient||!authUser||!S.session||isHydrating)return;
   const user=U();
   const {error:dataError}=await supabaseClient.from('user_data').upsert({user_id:authUser.id,data:{unit:user.unit,workouts:user.workouts,weights:user.weights,custom:user.custom,draft:user.draft,sched:user.sched||{}}});
   if(dataError)throw dataError;
-  const {error:profileError}=await supabaseClient.from('profiles').update({display_name:user.profile.displayName||S.session,bio:user.profile.bio||'',avatar_url:user.profile.avatar||'',unit:user.unit}).eq('id',authUser.id);
-  if(profileError)throw profileError;
+  if(updateProfile){
+    const {error:profileError}=await supabaseClient.from('profiles').update({display_name:user.profile.displayName||S.session,bio:user.profile.bio||'',avatar_url:user.profile.avatar||'',unit:user.unit}).eq('id',authUser.id);
+    if(profileError)throw profileError;
+  }
 }
 function save(){
   if(!supabaseClient||!authUser||!S.session||isHydrating)return;
@@ -467,7 +469,7 @@ function vFriends(){
 }
 async function saveProfileBio(){
   U().profile.bio=$('#profileBio').value.trim();
-  try{await persistRemoteUserData();toast('Profile saved');render()}
+  try{await persistRemoteUserData({updateProfile:true});toast('Profile saved');render()}
   catch(error){showSyncError(error)}
 }
 async function updateProfileAvatar(input){
@@ -490,7 +492,7 @@ async function updateProfileAvatar(input){
     if(uploadError)throw uploadError;
     const {data}=supabaseClient.storage.from('fitlog-media').getPublicUrl(path);
     U().profile.avatar=data.publicUrl;
-    await persistRemoteUserData();
+    await persistRemoteUserData({updateProfile:true});
     render();
   }catch(error){showSyncError(error);toast(error.message||'Could not upload profile photo.')}
 }
@@ -500,7 +502,7 @@ async function removeProfileAvatar(){
   const path=avatar.includes(marker)?decodeURIComponent(avatar.split(marker)[1]):'';
   if(path.startsWith(`${authUser.id}/`)){const {error}=await supabaseClient.storage.from('fitlog-media').remove([path]);if(error)console.warn(error)}
   U().profile.avatar='';
-  try{await persistRemoteUserData();render()}catch(error){showSyncError(error)}
+  try{await persistRemoteUserData({updateProfile:true});render()}catch(error){showSyncError(error)}
 }
 function vProfile(){
   const profile=U().profile||{};

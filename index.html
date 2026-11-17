@@ -19,11 +19,29 @@ header{display:flex;justify-content:space-between;align-items:center;padding:6px
 h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:12px}
 input,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px}
-button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--chip);color:var(--tx);cursor:pointer}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--chip);color:var(--tx);cursor:pointer;min-width:0}
 button.pri{background:var(--ac);color:var(--acx);font-weight:600;width:100%;padding:13px}
-button.link{background:none;color:var(--mut);padding:6px}
-button.del{background:none;color:var(--dn);padding:4px 8px}
+button.link{background:none;color:var(--mut);padding:6px;display:inline-flex;align-items:center;justify-content:center;min-width:0}
+button.del{background:none;color:var(--dn);padding:4px 8px;display:inline-flex;align-items:center;justify-content:center;min-width:0}
 .row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.row>button{flex:0 0 auto}
+.action-row{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap}.action-row>*{flex:0 0 auto}
+.icon-btn{width:38px;height:38px;padding:0;border-radius:999px;border:1px solid var(--bd);background:var(--card);color:var(--tx);display:inline-flex;align-items:center;justify-content:center}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon-btn.is-liked{color:#ef4444;background:#ffe4e6;border-color:#fecdd3}
+.icon-btn.is-liked svg{fill:currentColor;stroke:currentColor}
+.feed-badge{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--bd);background:var(--chip);color:var(--tx);font-size:12px;font-weight:600;min-width:0}
+.feed-badge svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.post-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.post-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.comment-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.65);display:flex;align-items:flex-end;justify-content:center;padding:16px;z-index:40}
+.comment-modal{width:min(100%,480px);max-height:80vh;background:var(--card);border:1px solid var(--bd);border-radius:18px 18px 0 0;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+.comment-modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--bd)}
+.comment-list{max-height:280px;overflow:auto;padding:12px 14px 6px}
+.comment-item{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);margin-bottom:8px}
+.comment-item-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.comment-actions{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.comment-form{padding:12px 14px 14px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:8px}
+.comment-form textarea{width:100%;resize:vertical;min-height:80px;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit}
 .big{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .chip{background:var(--chip);border-radius:20px;padding:3px 10px;font-size:13px}
@@ -59,6 +77,7 @@ let S=load();
 function save(){try{localStorage.setItem('fitlog1',JSON.stringify(S))}catch(e){mem=S}}
 const PRESET={Chest:['Bench Press','Incline Dumbbell Press','Push-Up','Chest Fly'],Back:['Deadlift','Pull-Up','Barbell Row','Lat Pulldown'],Legs:['Squat','Leg Press','Lunge','Romanian Deadlift','Calf Raise'],Glutes:['Hip Thrust'],Shoulders:['Overhead Press','Lateral Raise','Face Pull'],Biceps:['Barbell Curl','Hammer Curl'],Triceps:['Triceps Pushdown','Dips','Skull Crusher'],Core:['Plank','Crunch','Hanging Leg Raise'],Cardio:['Running','Cycling','Rowing']};
 let tab='w',mode='in',asked=false,sel=null,arm=null,calM=0,selK=null,pd=null,editing=false;
+let commentPanel={open:false,postAuthor:null,postId:null,editingCommentId:null,draft:''};
 const ensureUserShape=u=>{
   if(!u)return u;
   u.friends=Array.isArray(u.friends)?u.friends:[];
@@ -262,6 +281,46 @@ function deleteComment(postAuthor, postId, commentId){
   post.comments=Array.isArray(post.comments)?post.comments:[];
   post.comments=post.comments.filter(c=>String(c.id)!==String(commentId));
   save();
+  if(commentPanel.open && String(commentPanel.postAuthor)===String(postAuthor) && Number(commentPanel.postId)===Number(postId)){
+    commentPanel={...commentPanel,editingCommentId:null,draft:''};
+  }
+  render();
+}
+function openCommentPanel(postAuthor, postId){
+  if(!postAuthor || postId===undefined || postId===null)return;
+  commentPanel={open:true,postAuthor:String(postAuthor),postId:Number(postId),editingCommentId:null,draft:''};
+  render();
+}
+function closeCommentPanel(){
+  commentPanel={open:false,postAuthor:null,postId:null,editingCommentId:null,draft:''};
+  render();
+}
+function beginEditComment(postAuthor, postId, commentId){
+  const author=S.users[postAuthor];
+  if(!author)return;
+  const post=author.posts.find(p=>String(p.id)===String(postId));
+  if(!post)return;
+  const comment=post.comments.find(c=>String(c.id)===String(commentId));
+  if(!comment)return;
+  commentPanel={...commentPanel,editingCommentId:String(commentId),draft:comment.text};
+  render();
+}
+function submitCommentPanel(){
+  const author=S.users[commentPanel.postAuthor];
+  if(!author||commentPanel.postId===null)return;
+  const post=author.posts.find(p=>String(p.id)===String(commentPanel.postId));
+  if(!post)return;
+  const text=String(commentPanel.draft||'').trim();
+  if(!text)return;
+  post.comments=Array.isArray(post.comments)?post.comments:[];
+  if(commentPanel.editingCommentId){
+    const comment=post.comments.find(c=>String(c.id)===String(commentPanel.editingCommentId));
+    if(comment)comment.text=text;
+  }else{
+    post.comments.push({id:Date.now(), author:S.session, text, createdAt:Date.now()});
+  }
+  save();
+  commentPanel={...commentPanel,editingCommentId:null,draft:''};
   render();
 }
 const due=()=>{const w=U().weights=U().weights||[];return !w.length||Date.now()-w[w.length-1].date>7*DAY};
@@ -320,6 +379,55 @@ function vSocial(){
     .filter(name=>name===S.session || me.friends.includes(name))
     .flatMap(name => (S.users[name].posts||[]).map(post => ({...post,author:name})))
     .sort((a,b)=>Number(b.createdAt)-Number(a.createdAt));
+  const commentBadgeSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18.5 3.5 20V7.5A2.5 2.5 0 0 1 6 5h12a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 17H8.5L6 18.5Z"></path></svg>';
+  const heartSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.35-9.5-8.1C1 10.1 2.8 5.5 7 5.5c2.1 0 3.3 1.15 4 2.35.7-1.2 1.9-2.35 4-2.35 4.2 0 6 4.6 4.5 6.9-2 3.75-9.5 8.1-9.5 8.1Z"></path></svg>';
+
+  const renderPostCard=post=>{
+    const likes=Array.isArray(post.likes)?post.likes:[];
+    const comments=Array.isArray(post.comments)?post.comments:[];
+    const liked=likes.includes(S.session);
+    const authorName=String(post.author || S.session);
+    const editButtons=post.author===S.session?`<button class="link" onclick="const newCaption=prompt('Edit your post', ${JSON.stringify(post.caption||'')}); if(newCaption!==null){ editPost(${post.id}, newCaption); }">Edit</button><button class="del" onclick="deletePost(${post.id})">Delete</button>`:'';
+    const mediaHtml=post.media&&post.media.length?`<div style="display:grid;gap:8px;margin:8px 0">${post.media.map(item=>item.type.startsWith('video/')?`<video src="${item.data}" controls playsinline style="width:100%;max-height:250px;border-radius:10px;background:#000"></video>`:`<img src="${item.data}" alt="Workout attachment" style="width:100%;border-radius:10px;max-height:250px;object-fit:cover" />`).join('')}</div>`:'';
+    const exerciseHtml=post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('');
+    return `
+      <div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)">
+        <div class="post-header">
+          <div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>
+          ${post.author===S.session?'<span class="chip">You</span>':''}
+          <div class="post-badges">
+            <span class="feed-badge">${likes.length}${heartSvg}</span>
+            <button class="feed-badge" onclick="openCommentPanel(${JSON.stringify(authorName)}, ${post.id})">${comments.length}${commentBadgeSvg}</button>
+          </div>
+        </div>
+        ${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}
+        ${mediaHtml}
+        <div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>
+        ${exerciseHtml}
+        <div class="action-row" style="margin-top:10px">
+          <button class="icon-btn ${liked?'is-liked':''}" onclick="toggleLike(${JSON.stringify(authorName)}, ${post.id})" aria-label="${liked?'Unlike':'Like'}">${heartSvg}</button>
+          <button class="icon-btn" onclick="openCommentPanel(${JSON.stringify(authorName)}, ${post.id})" aria-label="Comments">${commentBadgeSvg}</button>
+          ${editButtons}
+        </div>
+      </div>
+    `;
+  };
+
+  const feedHtml=feed.length?feed.map(renderPostCard).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>';
+  const modalHtml=commentPanel.open?(()=>{
+    const author=S.users[commentPanel.postAuthor];
+    if(!author || commentPanel.postId===null){
+      return `<div class="comment-modal-backdrop" onclick="closeCommentPanel()"><div class="comment-modal" onclick="event.stopPropagation()"><div class="comment-modal-header"><h2 style="margin:0">Comments</h2><button class="link" onclick="closeCommentPanel()">Close</button></div><div class="comment-list"><p class="mut" style="margin:0">This post is no longer available.</p></div></div></div>`;
+    }
+    const post=author.posts.find(p=>String(p.id)===String(commentPanel.postId));
+    if(!post){
+      return `<div class="comment-modal-backdrop" onclick="closeCommentPanel()"><div class="comment-modal" onclick="event.stopPropagation()"><div class="comment-modal-header"><h2 style="margin:0">Comments</h2><button class="link" onclick="closeCommentPanel()">Close</button></div><div class="comment-list"><p class="mut" style="margin:0">This post is no longer available.</p></div></div></div>`;
+    }
+    const comments=Array.isArray(post.comments)?post.comments:[];
+    const commentItems=comments.length?comments.map(c=>`<div class="comment-item"><div class="comment-item-top"><strong>${esc(c.author)}</strong>${c.author===S.session?`<span class="comment-actions"><button class="link" onclick="beginEditComment(${JSON.stringify(commentPanel.postAuthor)}, ${post.id}, ${c.id})">Edit</button><button class="del" onclick="deleteComment(${JSON.stringify(commentPanel.postAuthor)}, ${post.id}, ${c.id})">Delete</button></span>`:''}</div><div class="mut">${esc(c.text)}</div></div>`).join(''):'<p class="mut" style="margin:0">No comments yet.</p>';
+    return `<div class="comment-modal-backdrop" onclick="closeCommentPanel()"><div class="comment-modal" onclick="event.stopPropagation()"><div class="comment-modal-header"><h2 style="margin:0">Comments</h2><button class="link" onclick="closeCommentPanel()">Close</button></div><div class="comment-list">${commentItems}</div><div class="comment-form"><textarea placeholder="Write a comment..." oninput="commentPanel.draft=this.value">${esc(commentPanel.draft)}</textarea><button class="pri" onclick="submitCommentPanel()">${commentPanel.editingCommentId?'Save comment':'Post comment'}</button></div></div></div>`;
+  })():'';
+
   return `<div class="card"><h2>Friends</h2>
     <div class="row" style="margin-bottom:10px"><input id="friendSearch" placeholder="Search username" oninput="(function(){const q=this.value.toLowerCase();document.querySelectorAll('[data-user]').forEach(el=>{const ok=!q||el.dataset.user.includes(q);el.style.display=ok?'':'none';})}).call(this)"></div>
     ${allUsers.length?allUsers.map(name=>`<div class="row" data-user="${esc(name.toLowerCase())}" style="margin:8px 0;padding:8px 0;border-top:1px solid var(--bd)"><div><strong>${esc(name)}</strong><div class="mut">${S.users[name].followers?.length||0} follower${(S.users[name].followers||[]).length===1?'':'s'}</div></div><button class="${me.friends.includes(name)?'link':'pri'}" onclick="${me.friends.includes(name)?'unfollowUser':'followUser'}('${name}')">${me.friends.includes(name)?'Following':'Follow'}</button></div>`).join(''):'<p class="mut">No one else is in this local community yet.</p>'}
@@ -327,14 +435,8 @@ function vSocial(){
   <div class="card"><h2>Post a completed workout</h2>
     ${me.workouts.length?`<select id="postWorkoutSelect" style="margin-bottom:8px">${me.workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><textarea id="postCaption" rows="3" placeholder="Add a note about how it felt..." style="width:100%;resize:vertical;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);color:var(--tx)"></textarea><input id="postMediaInput" type="file" accept="image/*,video/*" multiple style="margin-top:8px" /><button class="pri" style="margin-top:8px" onclick="shareSelectedWorkout()">Share workout</button>`:'<p class="mut">Complete a workout first to share it.</p>'}
   </div>
-  <div class="card"><h2>Feed</h2>
-    ${feed.length?feed.map(post=>{
-      const likes=Array.isArray(post.likes)?post.likes:[];
-      const comments=Array.isArray(post.comments)?post.comments:[];
-      const liked=likes.includes(S.session);
-      return `<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}${post.media&&post.media.length?`<div style="display:grid;gap:8px;margin:8px 0">${post.media.map(item=>item.type.startsWith('video/')?`<video src="${item.data}" controls playsinline style="width:100%;max-height:250px;border-radius:10px;background:#000"></video>`:`<img src="${item.data}" alt="Workout attachment" style="width:100%;border-radius:10px;max-height:250px;object-fit:cover" />`).join('')}</div>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}<div class="row" style="margin:10px 0 0;gap:6px;justify-content:flex-start"><span class="chip">${likes.length} like${likes.length===1?'':'s'}</span>${comments.length?`<span class="chip">${comments.length} comment${comments.length===1?'':'s'}</span>`:''}</div>${comments.length?`<div style="margin-top:10px;border-top:1px solid var(--bd);padding-top:8px">${comments.map(c=>`<div class="row" style="margin:4px 0;gap:6px;align-items:flex-start"><div class="mut" style="flex:1"><strong>${esc(c.author)}</strong>: ${esc(c.text)}</div>${c.author===S.session?`<div class="row" style="flex:0;gap:4px"><button class="link" onclick="editComment('${esc(post.author)}', ${post.id}, ${c.id})">Edit</button><button class="del" onclick="deleteComment('${esc(post.author)}', ${post.id}, ${c.id})">Delete</button></div>`:''}</div>`).join('')}</div>`:''}<div class="row" style="margin-top:10px"><button class="${liked?'link':'pri'}" onclick="toggleLike('${esc(post.author)}', ${post.id})">${liked?'Unlike':'Like'} (${likes.length})</button><button class="link" onclick="addComment('${esc(post.author)}', ${post.id})">Comment${comments.length?` (${comments.length})`:''}</button>${post.author===S.session?`<button class="link" onclick="const newCaption=prompt('Edit your post', ${JSON.stringify(post.caption||'')}); if(newCaption!==null){ editPost(${post.id}, newCaption); }">Edit</button><button class="del" onclick="deletePost(${post.id})">Delete</button>`:''}</div></div>`;
-    }).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
-  </div>`;
+  <div class="card"><h2>Feed</h2>${feedHtml}</div>
+  ${modalHtml}`;
 }
 const DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const TIPS=['Sleep 7–9 hours. Most muscle repair happens while you sleep.','Eat enough protein across the day and enough carbs to refill your energy stores.','Drink plenty of water, especially if you sweat a lot when training.','Take a light walk or do easy stretching and mobility work to keep blood flowing.','Foam roll or gently massage tight, sore areas.','A warm shower or bath can help muscles relax.','Mild soreness is normal, but sharp or joint pain isn’t. Rest it, and see a professional if it lingers.','Keep stress low. Rest days work best when they’re genuinely restful.'];

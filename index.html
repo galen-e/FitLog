@@ -104,10 +104,31 @@ function finish(){
   const d=D(),ex=d.ex.map(e=>({...e,sets:e.sets.filter(s=>+s.reps>0||+s.weight>0)})).filter(e=>e.sets.length);
   if(!ex.length){toast('Add at least one set first.');return}
   const u=U();
-  u.workouts.unshift({id:Date.now(),date:Date.now(),name:d.name.trim()||'Workout',dur:secs(d),groups:[...new Set(ex.map(e=>e.group))],ex});
+  const dateValue=Date.now();
+  const baseName=stripWorkoutDateSuffix(d.name.trim()||'Workout');
+  const finalName=buildWorkoutName(baseName, dateValue);
+  const key=normalizeWorkoutName(baseName);
+  const workout={id:Date.now(),date:dateValue,name:finalName,dur:secs(d),groups:[...new Set(ex.map(e=>e.group))],ex};
+  const existingIndex=u.workouts.findIndex(w=>normalizeWorkoutName(stripWorkoutDateSuffix(w.name))===key);
+  if(existingIndex>=0){
+    u.workouts.splice(existingIndex,1,workout);
+  }else{
+    u.workouts.unshift(workout);
+  }
   u.draft=null;save();tab='h';toast('Workout saved');render();
 }
 function discard(){U().draft=null;save();render()}
+function normalizeWorkoutName(name){return String(name||'').trim().toLowerCase().replace(/\s+/g,' ')}
+function stripWorkoutDateSuffix(name){
+  const text=String(name||'').trim();
+  const match=text.match(/^(.*?)(?:\s*[-–—]\s*[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})$/);
+  return match?match[1].trim():text;
+}
+function buildWorkoutName(rawName, dateValue=Date.now()){
+  const base=String(rawName||'').trim() || 'Workout';
+  const dateLabel=new Date(dateValue).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  return `${base} - ${dateLabel}`;
+}
 function delW(id){if(arm!==id){arm=id;render();return}const u=U();u.workouts=u.workouts.filter(w=>w.id!==id);arm=null;save();render()}
 function followUser(target){
   if(!target||target===S.session)return;

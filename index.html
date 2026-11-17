@@ -323,8 +323,8 @@ function vPlan(){
 }
 function vAuth(){
   return `<header><h1>FitLog</h1></header><div class="card"><h2>${mode==='in'?'Log in':'Create account'}</h2>
-  <input id="un" placeholder="Username" autocapitalize="none" autocomplete="username" style="margin-bottom:8px">
-  <input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="${mode==='in'?'current-password':'new-password'}" style="margin-bottom:8px">
+  <input id="un" name="fitlog-username" placeholder="Username" autocapitalize="none" autocomplete="off" data-lpignore="true" data-lastpass-ignore="true" aria-label="Username" style="margin-bottom:8px">
+  <input id="pw" name="fitlog-password" type="password" placeholder="Password (6+ characters)" autocomplete="off" data-lpignore="true" data-lastpass-ignore="true" aria-label="Password" style="margin-bottom:8px">
   ${mode==='up'?'<select id="unit" style="margin-bottom:8px"><option value="lb">Pounds (lb)</option><option value="kg">Kilograms (kg)</option></select>':''}
   <div class="err" id="err"></div><button class="pri" onclick="auth()">${mode==='in'?'Log in':'Sign up'}</button>
   <button class="link" style="width:100%;margin-top:6px" onclick="mode=\'${mode==='in'?'up':'in'}\';render()">${mode==='in'?'New here? Create an account':'Have an account? Log in'}</button></div>

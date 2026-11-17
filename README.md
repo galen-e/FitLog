@@ -8,7 +8,7 @@ Includes a weekly split planner and calendar with rest-day recovery tips.
 1. Create a Supabase project.
 2. In the Supabase SQL Editor, run the contents of `supabase-schema.sql`. This creates the tables, row-level security policies, profile creation trigger, and media bucket used by FitLog.
 3. Open **Project Settings → API** and copy the Project URL and `anon`/publishable key into `supabase-config.js`.
-4. In **Authentication → URL Configuration**, set the Site URL to your deployed FitLog URL and add that URL to the redirect allow list.
+4. In **Authentication → URL Configuration**, set **Site URL** to `https://galen-e.github.io/FitLog/` and add `https://galen-e.github.io/FitLog/**` to the redirect URL allow list. FitLog sends signup confirmation emails back to the app directory so GitHub Pages does not route them to the account's root 404 page.
 5. Email confirmation may remain enabled. New accounts must confirm their email before their first login.
 
 The anon/publishable key is intended for browser use. Never put a Supabase `service_role` key in this app. Row-level security is the access boundary.

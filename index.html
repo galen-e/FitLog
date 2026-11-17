@@ -85,6 +85,7 @@ const jsArg=s=>JSON.stringify(String(s??'')).replace(/&/g,'&amp;').replace(/"/g,
 const supabaseConfig=window.FITLOG_SUPABASE_CONFIG||{};
 const supabaseReady=!!(window.supabase?.createClient&&/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(supabaseConfig.url||'')&&supabaseConfig.anonKey&&!supabaseConfig.anonKey.includes('YOUR_'));
 const supabaseClient=supabaseReady?window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey):null;
+const authRedirectTo=supabaseConfig.authRedirectTo||((location.protocol==='http:'||location.protocol==='https:')?new URL('./',location.href).href:'https://galen-e.github.io/FitLog/');
 let S={users:{},session:null},authUser=null,authMessage='',isHydrating=false,syncSaveTimer=null,syncChannel=null,syncRefreshTimer=null;
 try{localStorage.removeItem('fitlog1')}catch(e){}
 function showSyncError(error){console.error(error);toast('Could not sync. Check your connection and try again.')}
@@ -183,7 +184,7 @@ async function auth(){
   let result;
   try{
     result=mode==='up'
-      ?await supabaseClient.auth.signUp({email,password,options:{data:{username,unit:$('#unit').value}}})
+      ?await supabaseClient.auth.signUp({email,password,options:{emailRedirectTo:authRedirectTo,data:{username,unit:$('#unit').value}}})
       :await supabaseClient.auth.signInWithPassword({email,password});
   }catch(error){er.textContent=error.message||'Could not reach the backend.';return}
   if(result.error){er.textContent=result.error.message.includes('profiles_username_key')?'That username is already taken.':result.error.message;return}
@@ -192,6 +193,12 @@ async function auth(){
   try{
     await hydrateRemoteState();subscribeToRemoteChanges();tab='w';workoutPanel='workout';asked=true;authMessage='';render();
   }catch(error){er.textContent=error.message||'Could not load your account.';authUser=null;await supabaseClient.auth.signOut()}
+}
+async function resendSignupConfirmation(){
+  const email=$('#email').value.trim().toLowerCase(),er=$('#err');
+  if(!email.includes('@')){er.textContent='Enter your email address first.';return}
+  const {error}=await supabaseClient.auth.resend({type:'signup',email,options:{emailRedirectTo:authRedirectTo}});
+  er.textContent=error?error.message:'A new confirmation email has been sent.';
 }
 async function logout(){
   try{await flushRemoteUserData();if(syncChannel)await supabaseClient.removeChannel(syncChannel);if(supabaseClient)await supabaseClient.auth.signOut()}
@@ -625,6 +632,7 @@ function vAuth(){
   <input id="pw" name="fitlog-password" type="password" placeholder="Password (8+ characters)" autocomplete="${mode==='in'?'current-password':'new-password'}" aria-label="Password" style="margin-bottom:8px">
   ${mode==='up'?'<select id="unit" style="margin-bottom:8px"><option value="lb">Pounds (lb)</option><option value="kg">Kilograms (kg)</option></select>':''}
   <div class="err" id="err">${esc(authMessage||(!supabaseReady?'Configure Supabase in supabase-config.js to enable accounts.':''))}</div><button class="pri" onclick="auth()">${mode==='in'?'Log in':'Sign up'}</button>
+  ${mode==='up'?'<button class="link" style="width:100%;margin-top:6px" onclick="resendSignupConfirmation()">Resend confirmation email</button>':''}
   <button class="link" style="width:100%;margin-top:6px" onclick="mode=\'${mode==='in'?'up':'in'}\';render()">${mode==='in'?'New here? Create an account':'Have an account? Log in'}</button></div>
   <p class="mut">Workouts are private to your account. Profiles and posts are shared with signed-in FitLog users.</p>`;
 }

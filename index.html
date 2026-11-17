@@ -186,6 +186,8 @@ async function shareSelectedWorkout(){
     createdAt:Date.now(),
     caption,
     media,
+    likes:[],
+    comments:[],
     workout:JSON.parse(JSON.stringify(workout))
   });
   save();
@@ -205,6 +207,60 @@ function editPost(postId, newCaption){
   const post=me.posts.find(p=>p.id===postId);
   if(!post)return;
   post.caption=String(newCaption||'').trim();
+  save();
+  render();
+}
+function toggleLike(postAuthor, postId){
+  const author=S.users[postAuthor];
+  if(!author)return;
+  const post=author.posts.find(p=>String(p.id)===String(postId));
+  if(!post)return;
+  post.likes=Array.isArray(post.likes)?post.likes:[];
+  if(post.likes.includes(S.session)){
+    post.likes=post.likes.filter(u=>u!==S.session);
+  }else{
+    post.likes.push(S.session);
+  }
+  save();
+  render();
+}
+function addComment(postAuthor, postId){
+  const author=S.users[postAuthor];
+  if(!author)return;
+  const post=author.posts.find(p=>String(p.id)===String(postId));
+  if(!post)return;
+  const text=window.prompt('Write a comment:');
+  if(text===null)return;
+  const comment=String(text).trim();
+  if(!comment)return;
+  post.comments=Array.isArray(post.comments)?post.comments:[];
+  post.comments.push({id:Date.now(), author:S.session, text:comment, createdAt:Date.now()});
+  save();
+  render();
+}
+function editComment(postAuthor, postId, commentId){
+  const author=S.users[postAuthor];
+  if(!author)return;
+  const post=author.posts.find(p=>String(p.id)===String(postId));
+  if(!post)return;
+  post.comments=Array.isArray(post.comments)?post.comments:[];
+  const comment=post.comments.find(c=>String(c.id)===String(commentId));
+  if(!comment)return;
+  const text=window.prompt('Edit your comment:', comment.text);
+  if(text===null)return;
+  const next=String(text).trim();
+  if(!next)return;
+  comment.text=next;
+  save();
+  render();
+}
+function deleteComment(postAuthor, postId, commentId){
+  const author=S.users[postAuthor];
+  if(!author)return;
+  const post=author.posts.find(p=>String(p.id)===String(postId));
+  if(!post)return;
+  post.comments=Array.isArray(post.comments)?post.comments:[];
+  post.comments=post.comments.filter(c=>String(c.id)!==String(commentId));
   save();
   render();
 }
@@ -272,7 +328,12 @@ function vSocial(){
     ${me.workouts.length?`<select id="postWorkoutSelect" style="margin-bottom:8px">${me.workouts.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><textarea id="postCaption" rows="3" placeholder="Add a note about how it felt..." style="width:100%;resize:vertical;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);color:var(--tx)"></textarea><input id="postMediaInput" type="file" accept="image/*,video/*" multiple style="margin-top:8px" /><button class="pri" style="margin-top:8px" onclick="shareSelectedWorkout()">Share workout</button>`:'<p class="mut">Complete a workout first to share it.</p>'}
   </div>
   <div class="card"><h2>Feed</h2>
-    ${feed.length?feed.map(post=>`<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}${post.media&&post.media.length?`<div style="display:grid;gap:8px;margin:8px 0">${post.media.map(item=>item.type.startsWith('video/')?`<video src="${item.data}" controls playsinline style="width:100%;max-height:250px;border-radius:10px;background:#000"></video>`:`<img src="${item.data}" alt="Workout attachment" style="width:100%;border-radius:10px;max-height:250px;object-fit:cover" />`).join('')}</div>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}${post.author===S.session?`<div class="row" style="margin-top:10px"><button class="link" onclick="const newCaption=prompt('Edit your post', ${JSON.stringify(post.caption||'')}); if(newCaption!==null){ editPost(${post.id}, newCaption); }">Edit</button><button class="del" onclick="deletePost(${post.id})">Delete</button></div>`:''}</div>`).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
+    ${feed.length?feed.map(post=>{
+      const likes=Array.isArray(post.likes)?post.likes:[];
+      const comments=Array.isArray(post.comments)?post.comments:[];
+      const liked=likes.includes(S.session);
+      return `<div style="border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg)"><div class="row" style="margin-bottom:8px"><div><strong>${esc(post.author)}</strong><div class="mut">${new Date(post.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>${post.author===S.session?'<span class="chip">You</span>':''}</div>${post.caption?`<p style="margin:0 0 8px">${esc(post.caption)}</p>`:''}${post.media&&post.media.length?`<div style="display:grid;gap:8px;margin:8px 0">${post.media.map(item=>item.type.startsWith('video/')?`<video src="${item.data}" controls playsinline style="width:100%;max-height:250px;border-radius:10px;background:#000"></video>`:`<img src="${item.data}" alt="Workout attachment" style="width:100%;border-radius:10px;max-height:250px;object-fit:cover" />`).join('')}</div>`:''}<div class="mut" style="margin-bottom:6px">${esc(post.workout.name)} · ${fmt(post.workout.dur)}</div>${post.workout.ex.map(ex=>`<div class="mut"><b style="color:var(--tx)">${esc(ex.name)}</b> — ${ex.sets.map(s=>`${+s.reps||0}×${+s.weight||0}`).join(', ')} ${me.unit}</div>`).join('')}<div class="row" style="margin:10px 0 0;gap:6px;justify-content:flex-start"><span class="chip">${likes.length} like${likes.length===1?'':'s'}</span>${comments.length?`<span class="chip">${comments.length} comment${comments.length===1?'':'s'}</span>`:''}</div>${comments.length?`<div style="margin-top:10px;border-top:1px solid var(--bd);padding-top:8px">${comments.map(c=>`<div class="row" style="margin:4px 0;gap:6px;align-items:flex-start"><div class="mut" style="flex:1"><strong>${esc(c.author)}</strong>: ${esc(c.text)}</div>${c.author===S.session?`<div class="row" style="flex:0;gap:4px"><button class="link" onclick="editComment('${esc(post.author)}', ${post.id}, ${c.id})">Edit</button><button class="del" onclick="deleteComment('${esc(post.author)}', ${post.id}, ${c.id})">Delete</button></div>`:''}</div>`).join('')}</div>`:''}<div class="row" style="margin-top:10px"><button class="${liked?'link':'pri'}" onclick="toggleLike('${esc(post.author)}', ${post.id})">${liked?'Unlike':'Like'} (${likes.length})</button><button class="link" onclick="addComment('${esc(post.author)}', ${post.id})">Comment${comments.length?` (${comments.length})`:''}</button>${post.author===S.session?`<button class="link" onclick="const newCaption=prompt('Edit your post', ${JSON.stringify(post.caption||'')}); if(newCaption!==null){ editPost(${post.id}, newCaption); }">Edit</button><button class="del" onclick="deletePost(${post.id})">Delete</button>`:''}</div></div>`;
+    }).join(''):'<p class="mut">Follow people or share a workout to populate your feed.</p>'}
   </div>`;
 }
 const DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -335,8 +396,9 @@ function render(){
   const a=$('#app');
   if(!S.session||!U()){a.innerHTML=vAuth();return}
   const v=tab==='w'?vWorkout():tab==='c'?vPlan():tab==='h'?vHistory():tab==='s'?vSocial():vProgress();
+  const totalLikes=Object.values(S.users).reduce((sum,user)=>sum+(Array.isArray(user.posts)?user.posts.reduce((count,post)=>count+(Array.isArray(post.likes)?post.likes.length:0),0):0),0);
   const ov=(!asked&&due())?`<div class="ov"><div class="card"><h2>Weekly weigh-in</h2><p class="mut">Log your body weight so we can track your progress.</p><input id="bw" type="number" inputmode="decimal" placeholder="Weight (${U().unit})" style="margin-bottom:10px"><button class="pri" onclick="addW()">Save</button><button class="link" style="width:100%" onclick="skipW()">Skip for now</button></div></div>`:'';
-  a.innerHTML=`<header><h1>FitLog</h1><div class="mut">${esc(S.session)} <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['c','Plan'],['h','History'],['p','Progress'],['s','Social']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
+  a.innerHTML=`<header><h1>FitLog</h1><div class="mut"><span>${esc(S.session)}</span> <span class="chip">${totalLikes} likes</span> <button class="link" onclick="logout()">Log out</button></div></header>${v}${ov}<nav>${[['w','Workout'],['c','Plan'],['h','History'],['p','Progress'],['s','Social']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</nav>`;
 }
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));

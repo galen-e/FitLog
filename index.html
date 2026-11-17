@@ -46,6 +46,7 @@ svg text{fill:var(--mut);font-size:10px}
 .day i{position:absolute;top:1px;right:3px;font-size:10px;color:var(--ac);font-style:normal}
 button.chip{border:1px solid var(--bd);background:var(--card);padding:4px 10px;font-size:13px}
 button.chip.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.masked-password{-webkit-text-security:disc}
 ul.tips{margin:6px 0 0;padding-left:20px}ul.tips li{margin:4px 0}
 </style></head>
 <body><main id="app"></main><div id="toast"></div>
@@ -324,7 +325,7 @@ function vPlan(){
 function vAuth(){
   return `<header><h1>FitLog</h1></header><div class="card"><h2>${mode==='in'?'Log in':'Create account'}</h2>
   <input id="un" name="fitlog-username" placeholder="Username" autocapitalize="none" autocomplete="off" data-lpignore="true" data-lastpass-ignore="true" aria-label="Username" style="margin-bottom:8px">
-  <input id="pw" name="fitlog-password" type="password" placeholder="Password (6+ characters)" autocomplete="off" data-lpignore="true" data-lastpass-ignore="true" aria-label="Password" style="margin-bottom:8px">
+  <input id="pw" name="fitlog-password" type="text" class="masked-password" placeholder="Password (6+ characters)" autocomplete="off" data-lpignore="true" data-lastpass-ignore="true" aria-label="Password" style="margin-bottom:8px">
   ${mode==='up'?'<select id="unit" style="margin-bottom:8px"><option value="lb">Pounds (lb)</option><option value="kg">Kilograms (kg)</option></select>':''}
   <div class="err" id="err"></div><button class="pri" onclick="auth()">${mode==='in'?'Log in':'Sign up'}</button>
   <button class="link" style="width:100%;margin-top:6px" onclick="mode=\'${mode==='in'?'up':'in'}\';render()">${mode==='in'?'New here? Create an account':'Have an account? Log in'}</button></div>
